@@ -90,7 +90,7 @@ const App: React.FC = () => {
       console.log(data);
       if (data.response_audio) {
         // Stop the audio if it's currently being played
-        if (isResponsePlaying) {
+        if (source.current) {
           stopResponseAudio();
         }
       
@@ -111,10 +111,12 @@ const App: React.FC = () => {
           analyser.current.connect(audioContext.current.destination);
           source.current.start();
           setIsResponsePlaying(true);
-          source.current.onended = () => setIsResponsePlaying(false);
+          source.current.onended = () => {
+            setIsResponsePlaying(false);
+            source.current = null;
+          };
         });
       }
-      
     
       setServerMessage(data);
     };
