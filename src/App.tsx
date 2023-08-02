@@ -88,18 +88,22 @@ const App: React.FC = () => {
     socket.onmessage = (message) => {
       const data: ServerMessage = JSON.parse(message.data);
       console.log(data);
-    
       if (data.response_audio) {
+        // Stop the audio if it's currently being played
+        if (isResponsePlaying) {
+          stopResponseAudio();
+        }
+      
         let raw = window.atob(data.response_audio);
         let rawLength = raw.length;
         let array = new Uint8Array(new ArrayBuffer(rawLength));
-    
+        
         for (let i = 0; i < rawLength; i++) {
           array[i] = raw.charCodeAt(i);
         }
-    
+        
         data.audioData = array;
-    
+        
         audioContext.current.decodeAudioData(array.buffer).then((buffer) => {
           source.current = audioContext.current.createBufferSource();
           source.current.buffer = buffer;
@@ -110,6 +114,7 @@ const App: React.FC = () => {
           source.current.onended = () => setIsResponsePlaying(false);
         });
       }
+      
     
       setServerMessage(data);
     };
