@@ -3,17 +3,16 @@ import styles from './App.module.css';
 import AudioVisualizer from './components/AudioVisualizer';
 import styled from 'styled-components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faMicrophone, faStop } from '@fortawesome/free-solid-svg-icons';
+import { faMicrophone, faStop, faSync } from '@fortawesome/free-solid-svg-icons';
+
 const StyledVisualizer = styled(AudioVisualizer)`
-  margin-top: 50px; // Increase this value as per your needs
+  margin-top: 50px;
 `;
 
 const VisualizerContainer = styled.div`
   display: flex;
   justify-content: center;
 `;
-
-
 
 interface ServerMessage {
   transcribed_text?: string;
@@ -25,62 +24,102 @@ interface ServerMessage {
 const App: React.FC = () => {
   const audioContext = useRef(new AudioContext());
   const analyser = useRef(audioContext.current.createAnalyser());
-  const source = useRef(audioContext.current.createBufferSource());
-
+  const source = useRef<AudioBufferSourceNode | null>(null);
+  
   const [socket, setSocket] = useState<WebSocket | null>(null);
+  const [connectionStatus, setConnectionStatus] = useState<string>("Connecting...");
   const [recorder, setRecorder] = useState<any | null>(null);
   const [serverMessage, setServerMessage] = useState<ServerMessage | null>(null);
+  const [isResponsePlaying, setIsResponsePlaying] = useState<boolean>(false);
   const textAreaRef = useRef<HTMLDivElement | null>(null);
 
-  // Establish websocket connection
+  let keepAliveInterval: NodeJS.Timeout | null = null;
+
   useEffect(() => {
+    connectSocket();
+  }, []);
+
+  const startKeepAlivePackets = () => {
+    if (keepAliveInterval) {
+      clearInterval(keepAliveInterval);
+    }
+    
+    keepAliveInterval = setInterval(() => {
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(new Uint8Array(1).buffer);
+      }
+    }, 30000);
+  }
+
+  const stopKeepAlivePackets = () => {
+    if (keepAliveInterval) {
+      clearInterval(keepAliveInterval);
+      keepAliveInterval = null;
+    }
+  }
+
+  const stopResponseAudio = () => {
+    source.current?.stop();
+    setIsResponsePlaying(false);
+  }
+
+  const connectSocket = () => {
     const socket = new WebSocket('ws://localhost:8000/listen');
 
     socket.onopen = () => {
       console.log('WebSocket Client Connected');
       setSocket(socket);
+      setConnectionStatus("Connected");
+      startKeepAlivePackets();
+    };
+
+    socket.onclose = (event) => {
+      console.log('WebSocket Connection Closed', event);
+      setSocket(null);
+      setConnectionStatus("Disconnected");
+      stopKeepAlivePackets();
+    };
+
+    socket.onerror = (error) => {
+      console.log('WebSocket Error: ', error);
+      setConnectionStatus("Error in connection");
     };
 
     socket.onmessage = (message) => {
       const data: ServerMessage = JSON.parse(message.data);
       console.log(data);
-
+    
       if (data.response_audio) {
-        // Convert base64 audio to Uint8Array for visualizer
         let raw = window.atob(data.response_audio);
         let rawLength = raw.length;
         let array = new Uint8Array(new ArrayBuffer(rawLength));
-
+    
         for (let i = 0; i < rawLength; i++) {
           array[i] = raw.charCodeAt(i);
         }
-
+    
         data.audioData = array;
-
+    
         audioContext.current.decodeAudioData(array.buffer).then((buffer) => {
+          source.current = audioContext.current.createBufferSource();
           source.current.buffer = buffer;
-
-          // Connect the source to the analyser and the context's destination
           source.current.connect(analyser.current);
           analyser.current.connect(audioContext.current.destination);
-
-          // Start the source
           source.current.start();
+          setIsResponsePlaying(true);
+          source.current.onended = () => setIsResponsePlaying(false);
         });
-
-        // let audio = new Audio('data:audio/wav;base64,' + data.response_audio);
-        // audio.oncanplay = function() {
-        //   console.log('Audio is able to start playing now');
-        //   audio.play();
-        // };
       }
-
+    
       setServerMessage(data);
     };
-  }, []);
+  };
 
   const startRecording = () => {
-    // Ask for audio permission and start recording
+    if (socket && socket.readyState !== WebSocket.OPEN) {
+      connectSocket();
+    }
+
     navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
       const mediaRecorder = new MediaRecorder(stream);
       const audioChunks : any = [];
@@ -90,7 +129,6 @@ const App: React.FC = () => {
       mediaRecorder.addEventListener("dataavailable", event => {
         audioChunks.push(event.data);
 
-        // After pushing to audioChunks, create a Blob and send it to the server
         const audioBlob = new Blob(audioChunks,{type : 'audio/wav'});
         const reader = new FileReader();
         reader.readAsArrayBuffer(audioBlob);
@@ -99,27 +137,26 @@ const App: React.FC = () => {
             let arrayBuffer = reader.result as ArrayBuffer;
             let array = new Uint8Array(arrayBuffer);
             if (socket && socket.readyState === WebSocket.OPEN) {
-              socket.send(array.buffer); // Sending the audio data to the server via websocket
+              socket.send(array.buffer);
             }
           }
         }
 
-        // Clear the audioChunks after sending the data
         audioChunks.length = 0;
       });
 
-      mediaRecorder.start(1000); // Set timeslice so dataavailable event triggers every second
+      mediaRecorder.start(1000);
     });
   }
 
   const stopRecording = () => {
-    // Stop the recording
     recorder?.stop();
   }
 
   return (
     <div className={styles.app}>
       <h2 className={styles.title}>Digitar.ai</h2>
+      <p className={styles.status}>{connectionStatus}</p>
       <div className={styles.section}>
         <h3>Digitar Response:</h3>
         <div className={styles.textBox} ref={textAreaRef}>
@@ -140,8 +177,17 @@ const App: React.FC = () => {
           <FontAwesomeIcon icon={faStop} />
           Stop Talking
         </button>
+        <button className={styles.button} onClick={connectSocket}>
+          <FontAwesomeIcon icon={faSync} />
+          Reconnect
+        </button>
+        {isResponsePlaying && (
+          <button className={styles.button} onClick={stopResponseAudio}>
+            <FontAwesomeIcon icon={faStop} />
+            Stop Response Audio
+          </button>
+        )}
       </div>
-      
     </div>
   );
 }

@@ -14,7 +14,9 @@
     margin-bottom: 1%;
     margin-right:2%
   }
-  
+  .status{
+    margin-right:4%;
+  }
   .button {
     padding: 10px 30px;
     margin: 1%;
