@@ -4,8 +4,9 @@
     align-items: center;
     justify-content: center;
     height: 100vh;
-    background-color: #252934; /* dark navy blue */
+    background-color: #171719; /* dark navy blue */
     color: #fff; /* white */
+    font-family: 'Roboto Mono', monospace;
   }
   
   .title {
@@ -15,19 +16,25 @@
   }
   
   .button {
-    padding: 10px 20px;
+    padding: 10px 30px;
     margin: 1%;
     margin-right:3%; 
     border: none;
     border-radius: 4px;
-    background-color: #E94560; /* vibrant pink */
+    background-color: #007aff; /* vibrant pink */
     color: #fff;
     cursor: pointer;
   }
   
   .button:hover {
-    background-color: #B6344C; /* darker pink */
+    background-color: #00356f; /* darker pink */
   }
+  .buttonContainer {
+    margin-top: 3%;
+    display: flex;
+    gap: 0px;/* Space between the buttons */
+  }
+  
   
   .section {
     display: flex;
@@ -51,21 +58,21 @@
 }
   
 
-  .textBox {
-    width: 100%; /* Adjusted this */
-    height: 100%;
-    padding-top:150px;
-    margin-top: 5%;
-    margin-right: 13%;
+.textBox {
+    width: 100%;
+    height: 200px; /* adjust as needed */
+    margin-top:2%;
+    margin-right:12%;
+    border: 1px solid #ccc;
+    padding: 10px;
     border-radius: 10px;
-    background-color: #31425a; /* slightly lighter navy blue */
-    color: #F3F4F6; /* off white */
-    border: none;
-    outline: none;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-    font-size: 1em;
+    border-color: rgb(66, 117, 175);
+    background-color:#202025 ;
+    overflow-y: auto; /* enables vertical scrolling */
+    white-space: pre-wrap; /* preserves newlines and spaces */
+    font-family: monospace; /* to look like a text box */
+    line-height: 1.5;
   }
-
 
   @media only screen and (max-width: 600px) {
     .app {

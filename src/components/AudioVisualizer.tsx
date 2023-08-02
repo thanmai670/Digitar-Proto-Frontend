@@ -1,51 +1,78 @@
-// import necessary dependencies
 import React, { useRef, useEffect } from 'react';
 import styled from 'styled-components';
 import * as d3 from 'd3';
 
 // define props
-type AudioVisualizerProps = {
-  data: Uint8Array;
-};
+interface AudioVisualizerProps {
+  audioContext: AudioContext;
+  analyser: AnalyserNode;
+}
 
 // define component
-const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ data }) => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ audioContext, analyser }) => {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const requestIdRef = useRef<number | null>(null);
 
-  // canvas drawing function
-  useEffect(() => {
-    if (!canvasRef.current) return;
-    const canvas = d3.select(canvasRef.current);
-    const context = canvas.node()!.getContext('2d')!;
-    const height = +canvas.attr('height');
-    const width = +canvas.attr('width');
-    context.fillStyle = 'white';
-    context.lineWidth = 2;
-    context.clearRect(0, 0, width, height);
-
-    // Start from the middle of the canvas
-    const yScale = d3.scaleLinear().domain([0, 255]).range([height, 0]);
-    context.beginPath();
-    context.strokeStyle = 'white'; // set line color to white
-
-    const xPadding = width * 0.2;  // controls where the wave line starts, 20% of canvas width in this case
-    const lineLength = width * 0.6;  // controls length of the line, 60% of canvas width in this case
-
-    // If data is all zero, draw a line in the middle
-    if (data.every((value) => value === 128)) {
-      context.moveTo(xPadding, yScale(128));
-      context.lineTo(xPadding + lineLength, yScale(128));
-    } else {
-      data.forEach((value, i) => {
-        if (i > data.length / 4 && i < (3 * data.length / 4)) {
-          context.lineTo(xPadding + ((i / data.length) * lineLength), yScale(value));
-        }
-      });
+  const draw = (context: CanvasRenderingContext2D, analyser: AnalyserNode) => {
+    const canvas = context.canvas;
+    const frequencyData = new Uint8Array(analyser.frequencyBinCount);
+  
+    // get the frequency data from the currently playing music
+    analyser.getByteFrequencyData(frequencyData);
+  
+    // clear the canvas
+    context.clearRect(0, 0, canvas.width, canvas.height);
+  
+    // always draw a horizontal line
+    var height = 0;
+    for (var i = 0; i < analyser.frequencyBinCount; i++) {
+      var value = frequencyData[i];
+      var percent = value / 255;
+      height = canvas.height * percent;
     }
+  
+    var offset = canvas.height - height - 1;
+    context.strokeStyle = '#008080'; // Teal color
+    context.beginPath();
+    context.moveTo(0, offset);
+    context.lineTo(canvas.width, offset);
     context.stroke();
-  }, [data]);
+  
+    // turn the byte array into something drawable
+    const radiusScale = canvas.height / 400;
+    const xOffset = 50; // Adjust this value to change the starting position of the waveform
+    for (var i = 0; i < analyser.frequencyBinCount; i++) {
+      var value = frequencyData[i];
+      var percent = value / 255;
+      var height = canvas.height * percent;
+      var offset = canvas.height - height - 1;
+      var barWidth = canvas.width / analyser.frequencyBinCount;
+  
+      context.fillStyle = '#008080'; // Teal color
+      context.fillRect(i * barWidth + xOffset, offset, barWidth, height);
+    }
+  
+    requestIdRef.current = requestAnimationFrame(() => draw(context, analyser));
+  }
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
 
-  return <canvas ref={canvasRef} width={window.innerWidth} height={150} />;
-};
+    const context = canvas.getContext('2d');
+    if (!context) return;
+
+    // Start the animation loop
+    requestIdRef.current = requestAnimationFrame(() => draw(context, analyser));
+
+    // Clean up function
+    return () => {
+      if (requestIdRef.current) {
+        cancelAnimationFrame(requestIdRef.current);
+      }
+    }
+  }, []);
+
+  return <canvas ref={canvasRef} />;
+}
 
 export default AudioVisualizer;

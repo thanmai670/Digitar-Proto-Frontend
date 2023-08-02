@@ -1,16 +1,36 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import styles from './App.module.css';
+import AudioVisualizer from './components/AudioVisualizer';
+import styled from 'styled-components';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faMicrophone, faStop } from '@fortawesome/free-solid-svg-icons';
+const StyledVisualizer = styled(AudioVisualizer)`
+  margin-top: 50px; // Increase this value as per your needs
+`;
+
+const VisualizerContainer = styled.div`
+  display: flex;
+  justify-content: center;
+`;
+
+
 
 interface ServerMessage {
   transcribed_text?: string;
   response_text?: string;
   response_audio?: string;
+  audioData?: Uint8Array;
 }
 
 const App: React.FC = () => {
+  const audioContext = useRef(new AudioContext());
+  const analyser = useRef(audioContext.current.createAnalyser());
+  const source = useRef(audioContext.current.createBufferSource());
+
   const [socket, setSocket] = useState<WebSocket | null>(null);
   const [recorder, setRecorder] = useState<any | null>(null);
   const [serverMessage, setServerMessage] = useState<ServerMessage | null>(null);
+  const textAreaRef = useRef<HTMLDivElement | null>(null);
 
   // Establish websocket connection
   useEffect(() => {
@@ -24,38 +44,38 @@ const App: React.FC = () => {
     socket.onmessage = (message) => {
       const data: ServerMessage = JSON.parse(message.data);
       console.log(data);
-      setServerMessage(data);
-      if (data.response_audio) {
-        let audio = new Audio('data:audio/wav;base64,' + data.response_audio);
 
-        audio.onerror = function() {
-          if (audio.error) {
-            switch(audio.error.code) {
-              case audio.error.MEDIA_ERR_ABORTED:
-                console.log('You aborted the playback.');
-                break;
-              case audio.error.MEDIA_ERR_NETWORK:
-                console.log('A network error caused the audio download to fail.');
-                break;
-              case audio.error.MEDIA_ERR_DECODE:
-                console.log('The audio playback was aborted due to a corruption problem or because the media used features your browser did not support.');
-                break;
-              case audio.error.MEDIA_ERR_SRC_NOT_SUPPORTED:
-                console.log('The audio could not be loaded, either because the server or network failed or because the format is not supported.');
-                break;
-              default:
-                console.log('An unknown error occurred.');
-                break;
-            }
-          } else {
-            console.log('audio.error is null');
-          }
-        };
-        audio.oncanplay = function() {
-            console.log('Audio is able to start playing now');
-            audio.play();
-        };
+      if (data.response_audio) {
+        // Convert base64 audio to Uint8Array for visualizer
+        let raw = window.atob(data.response_audio);
+        let rawLength = raw.length;
+        let array = new Uint8Array(new ArrayBuffer(rawLength));
+
+        for (let i = 0; i < rawLength; i++) {
+          array[i] = raw.charCodeAt(i);
+        }
+
+        data.audioData = array;
+
+        audioContext.current.decodeAudioData(array.buffer).then((buffer) => {
+          source.current.buffer = buffer;
+
+          // Connect the source to the analyser and the context's destination
+          source.current.connect(analyser.current);
+          analyser.current.connect(audioContext.current.destination);
+
+          // Start the source
+          source.current.start();
+        });
+
+        // let audio = new Audio('data:audio/wav;base64,' + data.response_audio);
+        // audio.oncanplay = function() {
+        //   console.log('Audio is able to start playing now');
+        //   audio.play();
+        // };
       }
+
+      setServerMessage(data);
     };
   }, []);
 
@@ -102,10 +122,26 @@ const App: React.FC = () => {
       <h2 className={styles.title}>Digitar.ai</h2>
       <div className={styles.section}>
         <h3>Digitar Response:</h3>
-        <textarea className={styles.textBox} readOnly value={serverMessage?.response_text || ''} />
+        <div className={styles.textBox} ref={textAreaRef}>
+          {serverMessage?.response_text || ''}
+        </div>
       </div>
-      <button className={styles.button} onClick={startRecording}>Start Talking</button>
-      <button className={styles.button} onClick={stopRecording}>Stop Talking</button>
+
+      <VisualizerContainer>
+        <StyledVisualizer audioContext={audioContext.current} analyser={analyser.current} />
+      </VisualizerContainer>
+     
+      <div className={styles.buttonContainer}>
+        <button className={styles.button} onClick={startRecording}>
+          <FontAwesomeIcon icon={faMicrophone} />
+          Start Talking
+        </button>
+        <button className={styles.button} onClick={stopRecording}>
+          <FontAwesomeIcon icon={faStop} />
+          Stop Talking
+        </button>
+      </div>
+      
     </div>
   );
 }
