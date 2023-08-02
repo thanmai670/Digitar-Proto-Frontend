@@ -64,7 +64,7 @@ const App: React.FC = () => {
   }
 
   const connectSocket = () => {
-    const socket = new WebSocket('ws://localhost:8000/listen');
+    const socket = new WebSocket(process.env.REACT_APP_WEBSOCKET_URL || 'ws://localhost:8000/listen');
 
     socket.onopen = () => {
       console.log('WebSocket Client Connected');
